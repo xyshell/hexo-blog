@@ -113,7 +113,7 @@ $ git submodule sync --recursive
 Then bring change for each submodule by:
 
 ``` bash
-$ git submodule uodate --init --recursive
+$ git submodule update --init --recursive
 ```
 
 ## Edit submodules
