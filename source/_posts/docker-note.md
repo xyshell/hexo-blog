@@ -11,11 +11,11 @@ toc: true
 
 uninstall old versions:
 
-``` bash
+```bash
 $ sudo apt-get remove docker docker-engine docker.io containerd runc
 ```
 
-``` bash
+```bash
 $ sudo apt-get update
 $ sudo apt-get install \
     apt-transport-https \
@@ -28,33 +28,33 @@ $ curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
 
 Verfiy key with the fingerprint:
 
-``` bash
+```bash
 sudo apt-key fingerprint 0EBFCD88
 ```
 
 For x86_64 / amd64 architecture:
 
-``` bash
+```bash
 $ sudo add-apt-repository \
    "deb [arch=amd64] https://download.docker.com/linux/debian \
    $(lsb_release -cs) \
    stable"
 ```
 
-``` bash
+```bash
 $ sudo apt-get update
 $ sudo apt-get install docker-ce docker-ce-cli containerd.io
 ```
 
 Run hello world demo
 
-``` bash
+```bash
 $ sudo docker run hello-world
 ```
 
 Avoid `sudo` when running docker:
 
-``` bash
+```bash
 $ sudo nano /etc/group
 ```
 
@@ -62,23 +62,23 @@ add username to `docker:x:999:<username>`, e.x. `docker:x:999:admin`
 
 ## On Ubuntu by Shell Script
 
-``` bash
+```bash
 $ wget -qO- https://get.docker.com/ | sh
 ```
 
 add user accout to local unix docker group, to avoid `sudo`:
 
-``` bash
+```bash
 sudo usermod -aG docker <username> # e.x. admin
 ```
 
 ## Launching a Docker container
 
-``` bash
+```bash
 nano Dockerfile
 ```
 
-``` Dockerfile
+```Dockerfile
 ##############################
 # Dockerfile to create Ubuntu webserver
 #
@@ -91,7 +91,7 @@ EXPOSE 80
 ##############################
 ```
 
-``` bash
+```bash
 docker build -t "webserver" .
 docker images
 docker run -d -p 80:80 webserver /usr/sbin/apache2ctl -D FOREGROUND
@@ -134,17 +134,17 @@ Every container can also write by copying read-only layer(files in it) to its wr
 
 ## Pull a docker image
 
-``` bash
+```bash
 $ docker image pull redis
 ```
 
 In fact, we are pulling layers:
 
-``` bash
+```bash
 Using default tag: latest
 latest: Pulling from library/redis
 afb6ec6fdc1c: Pull complete # layer
-608641ee4c3f: Pull complete 
+608641ee4c3f: Pull complete
 668ab9e1f4bc: Pull complete
 78a12698914e: Pull complete
 d056855f4300: Pull complete
@@ -162,13 +162,13 @@ Referencing by hash to avoid mismatch between the image asking for and the image
 
 Using overlay2 as storage driver, those layers are stored at `/var/lib/docker/overlay2`. To see layers, run:
 
-``` bash
+```bash
 $ sudo ls -l /var/lib/docker/overlay2
 ```
 
 to get content of layer, run:
 
-``` bash
+```bash
 $ sudo ls -l /var/lib/docker/overlay2/<sha256>
 ```
 
@@ -182,28 +182,28 @@ Layer structure, e.x.:
 
 ## Check images
 
-``` bash
+```bash
 $ docker image ls  / $ docker images
 $ docker image ls --digests # get sha256
 ```
 
 to see operation history of one image, run:
 
-``` bash
+```bash
 $ docker history redis
 ```
 
-every non-zero size creates a new layer, the rests add something to image's json config file. 
+every non-zero size creates a new layer, the rests add something to image's json config file.
 
 to get configs and layers of one image, run:
 
-``` bash
+```bash
 $ docker image inspect redis
 ```
 
 ## Delete images
 
-``` bash
+```bash
 $ docker image rm redis
 $ docker rmi alpine
 ```
@@ -218,13 +218,13 @@ Unofficial ones, e.x. nigelpoulton/tu-demo
 
 To pull all tags of images from repo, run
 
-``` bash
+```bash
 $ docker image pull <some-image> -a
 ```
 
 Content hashes for host, compressed hashes(distribution hashes) for wire, to verify. UIDs used for storing layers are random.
 
-run sha256 on content of layer -> layer's hash as ID; 
+run sha256 on content of layer -> layer's hash as ID;
 run sha256 on image config file -> image's hash as ID.
 
 ---
@@ -233,7 +233,7 @@ run sha256 on image config file -> image's hash as ID.
 
 ## Dockerfile
 
-Dockerfile is list of instructions for building images with an app inside(document the app). 
+Dockerfile is list of instructions for building images with an app inside(document the app).
 
 Good practice: put Dockerfile in root folder of app.
 
@@ -252,7 +252,7 @@ notes:
 
 e.x.:
 
-``` Dockerfile
+```Dockerfile
 FROM alpine
 
 LABEL maintainer="xyshell@bu.edu"
@@ -274,11 +274,11 @@ code: https://github.com/nigelpoulton/psweb
 
 ## Build image
 
-``` bash
+```bash
 $ docker image build -t <image-name> . # current folder
 ```
 
-``` bash
+```bash
 $ docker image build -t psweb https://github.com/nigelpoulton/psweb.git # git repo
 ```
 
@@ -288,7 +288,7 @@ During each step, docker spins up temporary containers, once the following layer
 
 ## Run container
 
-``` bash 
+```bash
 $ docker container run -d --name <app-name> -p 8080:8080 <image>
 ```
 
@@ -298,7 +298,7 @@ $ docker container run -d --name <app-name> -p 8080:8080 <image>
 
 `COPY --from==...`
 
-``` Dockerfile
+```Dockerfile
 FROM node:latest AS storefront
 WORKDIR /usr/src/atsea/app/react-app
 COPY react-app .
@@ -315,7 +315,7 @@ RUN mvn -B -s /usr/share/maven/ref/settings-docker.xml package -DskipTests
 FROM java:8-jdk-alpine
 RUN adduser -Dh /home/gordon gordon
 WORKDIR /static
-COPY --from=storefront /usr/src/atsea/app/react-app/build/ . 
+COPY --from=storefront /usr/src/atsea/app/react-app/build/ .
 WORKDIR /app
 COPY --from=appserver /usr/src/atsea/target/AtSea-0.0.1-SNAPSHOT.jar .
 ENTRYPOINT ["java", "-jar", "/app/AtSea-0.0.1-SNAPSHOT.jar"]
@@ -340,14 +340,14 @@ container should be ephemeral and immutable.
 
 ## Check containers
 
-``` bash
+```bash
 $ docker ps / $ docker container ls # running containers
 $ docker ps -a # all containers
 ```
 
 ## Run containers
 
-``` bash
+```bash
 $ docker container run ... / docker run ...
 $ docker container run -it alpine sh # iterative terminal
 $ docker container run -d alpine sleep 1d # detached mode, command
@@ -359,21 +359,21 @@ Stopping a container sends signal to main process in the container (PID1), gives
 
 Stopping and restarting a container doesn't destory data.
 
-``` bash
-$ docker container stop <container> 
+```bash
+$ docker container stop <container>
 ```
 
 ## Start containers
 
-``` bash
-$ docker container start <container> 
+```bash
+$ docker container start <container>
 ```
 
 ## Enter containers
 
 execing into a container starts a new process
 
-``` bash
+```bash
 $ docker container exec -it <container> sh
 $ docker container exec <container> ls -l
 $ docker container exec <container> cat <file-name>
@@ -383,14 +383,14 @@ exiting by `exit` kills the process, if it's the only one, container exits. Howe
 
 ## Remove containers
 
-``` bash
+```bash
 $ docker container rm <container>
 $ docker container rm $(docker container ls -aq) -f # remove all containers, force
 ```
 
 ## Port mapping
 
-``` bash
+```bash
 $ docker port <container>
 ```
 
@@ -400,7 +400,660 @@ e.x. 8080/tcp -> 0.0.0.0:8080
 
 Engine/daemon logs & Container/App logs
 
-``` bash
+```bash
 $ docker logs <container>
 ```
+
 ![logging](/photos/docker-note/logging.png)
+
+# Swarm
+
+swarm is a secure cluster of docker nodes, including "secure cluster" and "orchestrator"
+
+can do native swarm work and kubernetes on swarm cluster
+
+single-engine mode: install individual docker instances VS swarm mode: working on a cluster of docker instances.
+
+```bash
+$ docker system info #  Swarm: inactive/active
+```
+
+## Single docker node to swarm mode
+
+```bash
+$ docker swarm init
+$ docker swarm init --external-ca
+```
+
+if it's the first manager of swarm, it's automatically elected as its leader(root CA).
+
+- issue itself a client certificate.
+- Build a secure cluster store(ETD) and automatically distributed to every other manager in the swarm, encrypted.
+- default certificate rotation policy.
+- a set of cryptographic join tokens, one for joining new managers, another for joining new workers.
+
+on manager node, query cluster store to check all nodes:
+
+```bash
+$ docker node ls
+```
+
+## Join another manager and workers
+
+```bash
+$ docker swarm join
+```
+
+![swarm](/photos/docker-note/swarm.png)
+
+Every swarm has a **single leader manager**, the rest are follower managers.
+
+Commands could be issued to any manager, hitting a follower manager will proxy commands to the leader.
+
+If the leader fails, another one gets selected as a new leader.
+
+Best practice: ideal number of managers is 3, 5, 7. Make sure its odd number, to increase chance of achieving quorum.
+
+Connect managers by fast and reliable network. e.x. in AWS, put in same region, could cross availability zones.
+
+Workers doesn't join cluster store, which is just for managers.
+
+Workers have a full list of IPs for all managers. If one manager dies, workders talk to another.
+
+get join token:
+
+```bash
+$ docker swarm join-token manager
+SWMTKN-1-36xjjuzeryn11xc2xtrnjjxy288aef43o2r8o8grrpela5gsq4-2pvht1x50o3s8hm5rcur5cizo 192.168.0.31:2377
+$ docker swarm join-token worker
+SWMTKN-1-36xjjuzeryn11xc2xtrnjjxy288aef43o2r8o8grrpela5gsq4-5rzpk82wtde7durxwiu1mmh14 192.168.0.31:2377
+```
+
+note:
+
+- SWMTKN: identifier
+- 36xjju: cluster identifier, hash of cluster certificate (same for same swarm cluster)
+- 2pvht1 or 5rzpk8: determines worker or manager (could change by rotation)
+
+switch to another node:
+
+```bash
+$ docker swarm join --token ...
+```
+
+to rotate token(change password):
+
+```bash
+$ docker swarm join-token --rotate worker
+$ docker swarm join-token --rotate manager
+```
+
+The existing managers and workers stay unaffected.
+
+to get client certificates:
+
+```bash
+$ sudo openssl x509 -in /var/lib/docker/swarm/certificates/swarm-node.crt -text
+```
+
+in Subject field:
+
+```bash
+Subject: O = pn6210vdux6ppj3uef0kqn8cv, OU = swarm-manager, CN = dkyneha22mdz384n3b3mdvjk7
+```
+
+note:
+
+- O: organization, swarm ID
+- OU: organizational unit, node's role(swarm-manager/workder)
+- CN: canonical name, cryptographic node ID
+
+## Remmove swarm node
+
+```bash
+$ docker node demote <NODE> # To demote the node
+$ docker node rm <NODE> # To remove the node from the swarm
+$ docker swarm leave
+```
+
+## Autolock swarm
+
+- prevents restarted managers(not applied to workers) from automatically re-joining the swarm
+- pervents accidentally restoring old copies of the swarm
+
+```bash
+$ docker swarm init --autolock # autolock new swarm
+$ docker swarm update --autolock=true # autolock existing swarm
+SWMKEY-1-7e7w/gsGI2iGL9dqRtY/JqOOffnP5INPRw5uME2o+hM # jot down unlock key
+```
+
+Then if manager restarts by:
+
+```bash
+$ sudo service docker restart
+```
+
+Inspecting the cluster by `docker node ls` gives raft logs saying swarm is encrypted.
+
+re-join the swarm by:
+
+```bash
+$ docker swarm unlock
+Please enter unlock key: SWMKEY-1-7e7w/gsGI2iGL9dqRtY/JqOOffnP5INPRw5uME2o+hM
+```
+
+check again by `docker node ls` to confirm.
+
+## Update certificate expiry time
+
+```bash
+docker swarm update --cert-expiry 48h
+```
+
+check by `docker system info`:
+
+```bash
+CA Configuration:
+  Expiry Duration: 2 days
+```
+
+## Orchestration intro
+
+![orchestration_intro](/photos/docker-note/orchestration_intro.png)
+
+---
+
+# Container Networking
+
+See the current network:
+
+```bash
+$ docker network ls
+```
+
+Every container goes onto bridge (nat on Windows) network by default.
+
+![container_network](/photos/docker-note/container_network.png)
+
+## Network types
+
+containers talk to each other, VMs, physicals and internet. Vice versa.
+
+### Bridge Networking
+
+a.k.a single-host networking, docker0.
+
+Isolated layer-two network, even on the same host. Get in/out traffic by mapping port to the host.
+
+![bridge_network](/photos/docker-note/bridge_network.png)
+
+```bash
+$ docker network inspect bridge
+```
+
+```json
+{
+  "Name": "bridge", //
+  "Id": "f904473bbf1f625413c0cd2e1b7c0271253056709731cab4271ee95906ef270c", //
+  "Created": "2020-06-09T21:03:39.158623688Z",
+  "Scope": "local", //
+  "Driver": "bridge", //
+  "EnableIPv6": false,
+  "IPAM": {
+    "Driver": "default",
+    "Options": null,
+    "Config": [
+      {
+        "Subnet": "172.17.0.0/16" // ip range
+      }
+    ]
+  },
+  "Internal": false,
+  "Attachable": false,
+  "Ingress": false,
+  "ConfigFrom": {
+    "Network": ""
+  },
+  "ConfigOnly": false,
+  "Containers": {}, // currently no containers
+  "Options": {
+    "com.docker.network.bridge.default_bridge": "true",
+    "com.docker.network.bridge.enable_icc": "true",
+    "com.docker.network.bridge.enable_ip_masquerade": "true",
+    "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+    "com.docker.network.bridge.name": "docker0",
+    "com.docker.network.driver.mtu": "1500"
+  },
+  "Labels": {}
+}
+```
+
+create a container without specifying network by `$ docker container run --rm -d alpine sleep 1d`, then inspect again:
+
+````json
+{
+  "Containers": {
+    "4ea75ff740542150570357239d2f61f236f18d3840cffb3bdeae1df2745a9c2e": {
+      "Name": "cool_haibt",
+      "EndpointID": "f0dc9a4302cd78d262a1ec562fae8ae635d2cebb2733c60cfa40d5eb00d04564",
+      "MacAddress": "02:42:ac:11:00:02",
+      "IPv4Address": "172.17.0.2/16", //ip address
+      "IPv6Address": ""
+    }
+  }
+}
+
+to talk to outside, need port mapping:
+
+``` bash
+$ docker container run --rm -d --name web -p 8080:80 nginx # host port 8080 to container port 80
+````
+
+show port mapping by:
+
+```bash
+$ docker port <container>
+80/tcp -> 0.0.0.0:8080 # container port -> host port
+```
+
+then can visit the web by `localhost:8080`
+
+create a bridge network:
+
+```bash
+$ docker network create -d bridge <network-name>
+```
+
+check by `docker network ls`. To run containers in it:
+
+```bash
+$ docker container run --rm -d --network <network-name> alpine sleep 1d
+```
+
+### Overlay Networking
+
+a.k.a multi-host networking.
+
+Single layer-two network spanning multiple hosts
+
+```bash
+$ docker network create
+$ docker network create -o encrypted # encrypt data plane
+```
+
+built-in overlay is container to container only (not applied to VM, physicals)
+
+![overlay_network](/photos/docker-note/overlay_network.png)
+
+To create a overlay network:
+
+```bash
+$ docker network create -d overlay <network-name>
+```
+
+check by `docker network ls`, note its scope is "swarm", which means availabel on every node in the swarm.
+
+create a service to use this overlay network:
+
+```bash
+$ docker service create -d --name <service> --replicas 2 --network overnet alpine sleep 1d
+```
+
+check by `docker service ls`, check where by `docker service ps <service>`
+
+switch to one node which runs this service and run `docker network inspect <network-name>`
+
+```json
+{
+  "Containers": {
+    "7df4738446ac44a577d026a11ad73401c6cbdaaafcddbe75028954e7191fe1a1": {
+      "Name": "pinger.1.neku7xixs6g8oe2r8otlnqnep",
+      "EndpointID": "9a2dbdda2c15b991eeba7c1ab6fabd93e42b5ed4495b2f47d038dc871143a409",
+      "MacAddress": "02:42:0a:00:01:04",
+      "IPv4Address": "10.0.1.4/24", // jot down ip address
+      "IPv6Address": ""
+    },
+    "lb-overnet": {
+      "Name": "overnet-endpoint",
+      "EndpointID": "45c5d95a4d21eadcd2f99d0ff982ec4bc6d0c6a7f136136a93aeeb8c7d959898",
+      "MacAddress": "02:42:0a:00:01:06",
+      "IPv4Address": "10.0.1.6/24",
+      "IPv6Address": ""
+    }
+  }
+}
+```
+
+switch to the other node, exec into the container by `docker container exec -it <container> sh`, `ping 10.0.1.4`, check success.
+
+To remove service:
+
+```bash
+$ docker service rm $(docker service ls -q) # remove all services
+```
+
+### MACVLAN
+
+Containers also need to talk to VMs or physicals on existing VLANs.
+
+Gives every container its own IP address and MAC address on the existing network (directly on the wire, no bridges, no port mapping)
+
+requires promiscuous mode on the host. (cloud providers generally don't allow. look for IPVLAN instead, which doesn't require promiscuous mode)
+
+## Network services
+
+- Service discovery: locate services in a swarm
+
+- Load Balancing: access a service from any node in swarm (even nodes not hosting the service)
+
+### Service discovery
+
+Every service gets a name, registered with swarm DNS, uses swarm DNS
+
+```bash
+$ docker service create -d --name ping --network <overlay> --replicas 3 alpine sleep 1d
+$ docker service create -d --name pong --network <overlay> --replicas 3 alpine sleep 1d
+```
+
+check `docker service ls` to confirm (also check `docker container ls`), can locate other service in same overlay network by name, e.x.:
+
+```bash
+$ docker container exec -it <container> sh
+$ ping pong # sucesss
+```
+
+### Load Balancing
+
+```bash
+$ docker service create -d --name web --network overnet --replicas 1 -p 8080:80 nginx
+$ docker service inspect web --pretty
+Ports:
+ PublishedPort = 8080 #
+  Protocol = tcp
+  TargetPort = 80 #
+  PublishMode = ingress #
+```
+
+then can access by any node in the network by `<ip>:8080`.
+
+# Volumes
+
+running a new container automatically gets its own non-persistent, ephemeral graph driver storage (copy-on-write union mount, /var/lib/docker). However, volume is to store persistent data, entirely decoupled from containers, seamlessly plugs into containers.
+
+a directory on the docker, mounted into container at a specific mount point.
+
+can exist not only on local storage of docker host, but also on high-end external systems like SAN and NAS. Pluggable by docker store drive.
+
+## Create/Delete Volumes
+
+```bash
+$ docker volume create <volume>
+```
+
+check by `docker volume ls`, inspect by `docker volume inspect <volume>`
+
+```json
+[
+  {
+    "CreatedAt": "2020-06-10T16:29:30Z",
+    "Driver": "local", // default
+    "Labels": {},
+    "Mountpoint": "/var/lib/docker/volumes/myvol/_data", // inspect by ls -l /var/lib/docker/volumes/
+    "Name": "myvol",
+    "Options": {},
+    "Scope": "local" //
+  }
+]
+```
+
+to delete:
+
+```bash
+$ docker volume rm <volume>
+```
+
+## Attach volume
+
+to attach volume to a container:
+
+```bash
+$ docker container run -dit --name <container> --mount source=<volume>,target=/vol alpine:latest
+```
+
+note:
+
+- `source=<volume>`: if volume doesn't exist for now, will be created, check by `docker volume ls` to avoid typo.
+- `target=/vol`: where in the container to mount it, check by exec into container and `ls -l /vol/`
+
+Then, container can write data to `/vol` (e.x. `echo "some data" > /vol/newfile`), accessible in `/var/lib/docker/volumes/` as well, even if the container is removed.
+
+Deleting an in-use volume causes error message.
+
+Works with service as well.
+
+Also useful in Dockerfile's volume instruction.
+
+Pluggable, integrable with external, third-party storage systems using plugins de drivers.
+
+# Secrets
+
+string <= 500k, swarm mode for services only(not containers)
+
+![secret](/photos/docker-note/secret.png)
+
+note:
+/run/secrets/: stay in memory
+
+```bash
+$ docker secret create <secret> <file>
+```
+
+check by `docker secret ls`. inspect by `docker secret inspect <secret>`
+
+create a service, using secret:
+
+```bash
+$ docker service create -d --name <service> --secret <secret> --replicas 2 ...
+```
+
+inpect by `docker service inspect <service>` and look at secrets section. exec into containers by `docker container exec -it <container> sh`, find secret by `ls -l /run/secrets`, accessible
+
+can't delete an in-use secret by `docker secret rm <secret>`, need to delete service first.
+
+# Stacks
+
+swarm only
+
+stacks manage a bunch of services as a single app, highest layer of docker application hierarchy.
+
+![stack](/photos/docker-note/stack.png)
+
+Can run on Docker CLI, Docker UCP, Docker Cloud. 
+
+stack file: YAML config file including **version**, **services**, **network**, **volumes**, documenting the app. Can do version control.
+
+![stack_file](/photos/docker-note/stack_file.png)
+
+```yml
+version: "3" # >=3
+services:
+  redis: # service 1st
+    image: redis:alpine # 
+    networks:
+      - frontend 
+    deploy: # new in version 3
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+  db:
+    image: postgres:9.4
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints: [node.role == manager] # only run on manager nodes
+  vote:
+    image: dockersamples/examplevotingapp_vote:before
+    ports:
+      - 5000:80
+    networks:
+      - frontend
+    depends_on:
+      - redis
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 2
+      restart_policy:
+        condition: on-failure
+  result:
+    image: dockersamples/examplevotingapp_result:before
+    ports:
+      - 5001:80
+    networks:
+      - backend
+    depends_on:
+      - db
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+
+  worker:
+    image: dockersamples/examplevotingapp_worker
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - db
+      - redis
+    deploy:
+      mode: replicated
+      replicas: 1
+      labels: [APP=VOTING]
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+      placement:
+        constraints: [node.role == manager]
+
+  visualizer:
+    image: dockersamples/visualizer:stable
+    ports:
+      - "8080:8080"
+    stop_grace_period: 1m30s
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  db-data:
+```
+source: https://github.com/dockersamples/example-voting-app/docker-stack.yml
+
+Then deploy the app by:
+
+```bash
+$ docker stack deploy -c <stackfile> <stack> # -c: compose file
+```
+
+check by `docker stack ls`, `docker stack ps <stack>`, `docker stack services <stack>`
+
+rescale service by CLI:
+
+``` bash
+$ docker service scale <stack>_<service>=20
+```
+
+then check by `docker stack services <stack>`, `docker service inspect <stack>_<service> --pretty`, look at Replicas section.
+
+better way is to update config file, and redeploy by:
+
+``` bash
+$ docker stack deploy -c <stackfile> <stack>
+```
+
+will update every service in the stack.
+
+# Enterprise Edition(EE)
+
+- a hardened Docker Engine
+- Ops UI
+- Secure on-premises registry
+
+![EECE](/photos/docker-note/EECE.png)
+
+## Universal Control Plane(UCP)
+
+based on EE, the operations GUI from Docker Inc, to manage swarm and k8s apps.
+
+![UCP](/photos/docker-note/UCP.png)
+
+## Docker Trusted Registry(DTR)
+
+based on EE and UCP, a registry to store images, a containerized app.
+
+![DTR](/photos/docker-note/DTR.png)
+
+## Role-based Access Control(RBAC)
+
+- subject: user, team
+- role: permissions
+- collection: resources(docker node)
+
+![RBAC](/photos/docker-note/RBAC.png)
+
+## Image scanning
+
+after update the image in local, need to push into registry.
+
+Tag the updated image:
+
+``` bash
+$ docker image tag <image> <dtr-dns>/<repo>/<image>:latest
+```
+
+check by `docker image ls` to see a new tagged image.
+
+login:
+
+``` bash
+$  docker login <dtr-dns> # username, passwork, user needs permission to write in the repo
+```
+
+ensure image scanning sets to "scan on push" in UCP's DTR's repo setting. Then push:
+
+``` bash
+$ docker image push <tagged-image>
+``` 
+
+Check in DTR's repo's images' vulnerabilities field.
+
+## HTTP Routing Mesh(HRM)
+
+For Docker CE's Routing Mesh(Swarm-mode Routing Mesh), Transport layer(L4).
+
+![routing_mesh](/photos/docker-note/routing_mesh.png)
+
+For Docker EE's HRM, Application layer(L7). Route based on host header.
+
+![HRM](/photos/docker-note/HRM.png)
