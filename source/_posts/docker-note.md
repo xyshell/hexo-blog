@@ -113,7 +113,7 @@ curl localhost
 
 "Daemon" can restart without affecting on containers, which means upgrading doesn't kill containers, same for "containerd". Can restart them, leaving all containers running, when come back, they re-discover running containers and reconnect to the shim.
 
-## Docker on Windows: Native & Hyper-V
+## Docker on Windows: Native and Hyper-V
 
 ![windows_container](/photos/docker-note/windows_container.png)
 
@@ -174,7 +174,7 @@ $ sudo ls -l /var/lib/docker/overlay2/<sha256>
 
 Layer structure, e.x.:
 
-1. Base layer (OS files & objects)
+1. Base layer (OS files and objects)
 2. App codes
 3. Updates ...
 
@@ -289,14 +289,22 @@ During each step, docker spins up temporary containers, once the following layer
 ## Run container
 
 ```bash
-$ docker container run -d --name <app-name> -p 8080:8080 <image>
+$ docker container run -d --name <app-name> -p 8080:8080 <image> # detach mode
+$ docker run -dit --name alpine1 alpine ash # iterative and detach, can docker attach alpine1 later
 ```
 
 ## Multi-stage Builds
 
-`FROM ... AS ...`
+use multiple FROM statements in Dockerfile.
 
-`COPY --from==...`
+Each FROM instruction can use a different base, and each of them begins a new stage of the build.
+
+can selectively copy artifacts from one stage to another, leaving behind everything you don’t want in the final image.
+
+- `FROM ... AS ...`
+- `COPY --from==...`
+
+example 1:
 
 ```Dockerfile
 FROM node:latest AS storefront
@@ -324,6 +332,30 @@ CMD ["--spring.profiles.active=postgres"]
 
 source: https://github.com/dockersamples/atsea-sample-shop-app/blob/master/app/Dockerfile
 
+example 2:
+
+```Dockerfile
+FROM golang:1.7.3 AS builder
+WORKDIR /go/src/github.com/alexellis/href-counter/
+RUN go get -d -v golang.org/x/net/html
+COPY app.go    .
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app .
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+COPY --from=builder /go/src/github.com/alexellis/href-counter/app .
+CMD ["./app"]
+```
+
+source: https://docs.docker.com/develop/develop-images/multistage-build/#name-your-build-stages
+
+When building image, don’t have to build the entire Dockerfile including every stage. Can specify a target build stage, and stop at that stage.
+
+```bash
+$ docker build --target builder -t alexellis2/href-counter:latest .
+```
+
 ---
 
 # Docker containers
@@ -338,11 +370,12 @@ modernize traditional apps:
 
 container should be ephemeral and immutable.
 
-## Check containers
+## Check status
 
 ```bash
 $ docker ps / $ docker container ls # running containers
 $ docker ps -a # all containers
+$ docker port <container> # Port mapping e.x. 80/tcp -> 0.0.0.0:80
 ```
 
 ## Run containers
@@ -379,7 +412,7 @@ $ docker container exec <container> ls -l
 $ docker container exec <container> cat <file-name>
 ```
 
-exiting by `exit` kills the process, if it's the only one, container exits. However, ctrl+P+Q gets out of container without terminating its main process.
+exiting by `exit` kills the process, if it's the only one, container exits. However, ctrl+P+Q gets out of container without terminating its main process (can `docker attach` to it).
 
 ## Remove containers
 
@@ -388,17 +421,9 @@ $ docker container rm <container>
 $ docker container rm $(docker container ls -aq) -f # remove all containers, force
 ```
 
-## Port mapping
+## Log
 
-```bash
-$ docker port <container>
-```
-
-e.x. 8080/tcp -> 0.0.0.0:8080
-
-## Logging
-
-Engine/daemon logs & Container/App logs
+Engine/daemon logs and Container/App logs
 
 ```bash
 $ docker logs <container>
@@ -406,7 +431,9 @@ $ docker logs <container>
 
 ![logging](/photos/docker-note/logging.png)
 
-# Swarm
+# Swarm and Services
+
+## Swarm
 
 swarm is a secure cluster of docker nodes, including "secure cluster" and "orchestrator"
 
@@ -418,7 +445,7 @@ single-engine mode: install individual docker instances VS swarm mode: working o
 $ docker system info #  Swarm: inactive/active
 ```
 
-## Single docker node to swarm mode
+### Single docker node to swarm mode
 
 ```bash
 $ docker swarm init
@@ -435,10 +462,11 @@ if it's the first manager of swarm, it's automatically elected as its leader(roo
 on manager node, query cluster store to check all nodes:
 
 ```bash
-$ docker node ls
+$ docker node ls # lists all nodes in the swarm
+$ docker node ls --filter role=manager/worker
 ```
 
-## Join another manager and workers
+### Join another manager and workers
 
 ```bash
 $ docker swarm join
@@ -508,7 +536,7 @@ note:
 - OU: organizational unit, node's role(swarm-manager/workder)
 - CN: canonical name, cryptographic node ID
 
-## Remmove swarm node
+### Remmove swarm node
 
 ```bash
 $ docker node demote <NODE> # To demote the node
@@ -516,7 +544,7 @@ $ docker node rm <NODE> # To remove the node from the swarm
 $ docker swarm leave
 ```
 
-## Autolock swarm
+### Autolock swarm
 
 - prevents restarted managers(not applied to workers) from automatically re-joining the swarm
 - pervents accidentally restoring old copies of the swarm
@@ -544,7 +572,7 @@ Please enter unlock key: SWMKEY-1-7e7w/gsGI2iGL9dqRtY/JqOOffnP5INPRw5uME2o+hM
 
 check again by `docker node ls` to confirm.
 
-## Update certificate expiry time
+### Update certificate expiry time
 
 ```bash
 docker swarm update --cert-expiry 48h
@@ -557,11 +585,70 @@ CA Configuration:
   Expiry Duration: 2 days
 ```
 
-## Orchestration intro
+### Orchestration intro
 
 ![orchestration_intro](/photos/docker-note/orchestration_intro.png)
 
 ---
+
+## Services
+
+### Create service
+
+```bash
+$ docker service create --mode global # global mode
+```
+
+### Check status
+
+```bash
+$ docker service ls # list all services
+$ docker service ps <service> # check which nodes are running the service
+$ docker service inspect <service> --pretty # details
+```
+
+### Remove services
+
+```bash
+$ docker service rm $(docker service ls -q) # remove all services
+```
+
+### Update services
+
+rescale services by:
+
+```bash
+$ docker service scale <service>=20
+```
+
+update service's image by:
+
+```bash
+$ docker service update \
+  --image nigelpoulton/tu-demo:v2 \
+  --update-parallelism 2 \
+  --update-delay 20s <service>
+```
+
+then update parallelism and update delay settings are now part of the service definition.
+
+update service's network by:
+
+```bash
+$ docker service update \
+  --network-add <new-network> \
+  --network-rm <old-network \
+  <service>
+```
+
+### Logs
+
+```bash
+$ docker service logs <service>
+  --follow
+  --tail 1000
+  --details
+```
 
 # Container Networking
 
@@ -583,12 +670,12 @@ containers talk to each other, VMs, physicals and internet. Vice versa.
 
 a.k.a single-host networking, docker0.
 
-Isolated layer-two network, even on the same host. Get in/out traffic by mapping port to the host.
+can only connect containers on the same host. Isolated layer-two network, even on the same host. Get in/out traffic by mapping port to the host.
 
 ![bridge_network](/photos/docker-note/bridge_network.png)
 
 ```bash
-$ docker network inspect bridge
+$ docker network inspect bridge # default bridge network
 ```
 
 ```json
@@ -630,7 +717,7 @@ $ docker network inspect bridge
 
 create a container without specifying network by `$ docker container run --rm -d alpine sleep 1d`, then inspect again:
 
-````json
+```json
 {
   "Containers": {
     "4ea75ff740542150570357239d2f61f236f18d3840cffb3bdeae1df2745a9c2e": {
@@ -642,12 +729,14 @@ create a container without specifying network by `$ docker container run --rm -d
     }
   }
 }
+```
 
 to talk to outside, need port mapping:
 
-``` bash
+```bash
 $ docker container run --rm -d --name web -p 8080:80 nginx # host port 8080 to container port 80
-````
+# --rm: remove the container once it exits/stops
+```
 
 show port mapping by:
 
@@ -668,6 +757,13 @@ check by `docker network ls`. To run containers in it:
 
 ```bash
 $ docker container run --rm -d --network <network-name> alpine sleep 1d
+```
+
+to switch container between networks:
+
+```bash
+$ docker network disconnect <network1> web # even when container is running
+$ docker network connect <network2> web
 ```
 
 ### Overlay Networking
@@ -696,10 +792,10 @@ check by `docker network ls`, note its scope is "swarm", which means availabel o
 create a service to use this overlay network:
 
 ```bash
-$ docker service create -d --name <service> --replicas 2 --network overnet alpine sleep 1d
+$ docker service create -d --name <service> --replicas 2 --network overnet alpine sleep 1d # default replicated mode
 ```
 
-check by `docker service ls`, check where by `docker service ps <service>`
+check by `docker service ls`, check which nodes are running the service by `docker service ps <service>`, more details run `docker service inspect <service>`
 
 switch to one node which runs this service and run `docker network inspect <network-name>`
 
@@ -725,12 +821,6 @@ switch to one node which runs this service and run `docker network inspect <netw
 ```
 
 switch to the other node, exec into the container by `docker container exec -it <container> sh`, `ping 10.0.1.4`, check success.
-
-To remove service:
-
-```bash
-$ docker service rm $(docker service ls -q) # remove all services
-```
 
 ### MACVLAN
 
@@ -760,6 +850,7 @@ check `docker service ls` to confirm (also check `docker container ls`), can loc
 ```bash
 $ docker container exec -it <container> sh
 $ ping pong # sucesss
+$ ping -c 2 pong # -c 2: only two ping attempts.
 ```
 
 ### Load Balancing
@@ -771,26 +862,33 @@ Ports:
  PublishedPort = 8080 #
   Protocol = tcp
   TargetPort = 80 #
-  PublishMode = ingress #
+  PublishMode = ingress # default mode
 ```
 
-then can access by any node in the network by `<ip>:8080`.
+ingress mode: publish a port on every node in the swarm — even nodes not running service replicas. then can access by any node in the network by port 8080.
+
+The alternative mode is host mode which only publishes the service on swarm nodes running replicas. by adding mode=host to the --publish output, using --mode global instead of --replicas=5, since only one service task can bind a given port on a given node.
 
 # Volumes
 
 running a new container automatically gets its own non-persistent, ephemeral graph driver storage (copy-on-write union mount, /var/lib/docker). However, volume is to store persistent data, entirely decoupled from containers, seamlessly plugs into containers.
 
-a directory on the docker, mounted into container at a specific mount point.
+a directory on the docker(also remote hosts or cloud providers by volume drivers), mounted into container at a specific mount point.
 
 can exist not only on local storage of docker host, but also on high-end external systems like SAN and NAS. Pluggable by docker store drive.
 
-## Create/Delete Volumes
+## Create Volumes
 
 ```bash
 $ docker volume create <volume>
 ```
 
-check by `docker volume ls`, inspect by `docker volume inspect <volume>`
+## Check status
+
+```bash
+$ docker volume ls
+$ docker volume inspect <volume>
+```
 
 ```json
 [
@@ -806,34 +904,99 @@ check by `docker volume ls`, inspect by `docker volume inspect <volume>`
 ]
 ```
 
-to delete:
+## Delete volume
+
+to delete a specific volume:
 
 ```bash
 $ docker volume rm <volume>
 ```
 
-## Attach volume
+rm an in-use volume causes error message.
 
-to attach volume to a container:
+to delete all unused volumes:
 
 ```bash
-$ docker container run -dit --name <container> --mount source=<volume>,target=/vol alpine:latest
+$ docker volume prune # delete unused volume
+```
+
+## Attach volume
+
+to attach volume to a container, either by --mount or -v:
+
+```bash
+$ docker run -d --name <container> --mount source=<volume>,target=/vol <image>
+$ docker run -d --name <container> -v <volume>:/vol <image>
 ```
 
 note:
 
-- `source=<volume>`: if volume doesn't exist for now, will be created, check by `docker volume ls` to avoid typo.
+- `source=<volume>`: if volume doesn't exist for now, will be created.
 - `target=/vol`: where in the container to mount it, check by exec into container and `ls -l /vol/`
+- if the container has files or directories in the directory to be mounted, the directory’s contents are copied into the volume.
+
+check by `docker inspect <container>`:
+
+```json
+"Mounts": [
+  {
+    "Type": "volume",
+    "Name": "myvol",
+    "Source": "/var/lib/docker/volumes/myvol/_data",
+    "Destination": "/vol",
+    "Driver": "local",
+    "Mode": "",
+    "RW": true,
+    "Propagation": ""
+  }
+],
+```
 
 Then, container can write data to `/vol` (e.x. `echo "some data" > /vol/newfile`), accessible in `/var/lib/docker/volumes/` as well, even if the container is removed.
 
-Deleting an in-use volume causes error message.
-
-Works with service as well.
+--mount works with service as well.
 
 Also useful in Dockerfile's volume instruction.
 
-Pluggable, integrable with external, third-party storage systems using plugins de drivers.
+## Volume for service
+
+```bash
+$ docker service create -d \
+  --replicas=4 \
+  --name <service> \
+  --mount source=myvol,target=/app \
+  <image>
+```
+
+note:
+
+- docker service create command does not support the -v or --volume
+
+## Read only volume
+
+```bash
+$ docker run -d \
+  --name=nginxtest \
+  --mount source=nginx-vol,destination=/usr/share/nginx/html,readonly \
+  nginx:latest
+```
+
+verfify by `docker inspect nginxtest`:
+
+```json
+"Mounts": [
+  {
+    "Type": "volume",
+    "Name": "nginx-vol",
+    "Source": "/var/lib/docker/volumes/nginx-vol/_data",
+    "Destination": "/usr/share/nginx/html",
+    "Driver": "local",
+    "Mode": "",
+    "RW": false, //
+    "Propagation": ""
+  }
+],
+```
 
 # Secrets
 
@@ -860,7 +1023,116 @@ inpect by `docker service inspect <service>` and look at secrets section. exec i
 
 can't delete an in-use secret by `docker secret rm <secret>`, need to delete service first.
 
-# Stacks
+# Docker Compose and Stack
+
+## Docker compose
+
+### Install on linux
+
+1. Download the current stable release of Docker Compose:
+
+```bash
+$ curl -L "https://github.com/docker/compose/releases/download/1.26.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+```
+
+2. Make it executable:
+
+```bash
+$ chmod +x /usr/local/bin/docker-compose
+```
+
+### Compose files
+
+Compose uses YAML files to define multi-service applications.
+
+The default name for the Compose YAML file is docker-compose.yml
+
+Flask app example:
+
+```yml
+version: "3.5" # mandatory
+services: # application services
+  web-fe: # create a web front-end container called web-fe
+    build: . # build a new image by Dockerfile in '.' to create container for web-fe
+    command: python app.py # Override CMD in Dockerfile, which has Python and app.py
+    ports:
+      - target: 5000 # container port
+        published: 5000 # host port
+    networks:
+      - counter-net # already exist or to be defined
+    volumes:
+      - type: volume
+      source: counter-vol # already exist or to be defined
+      target: /code # mount to container
+  redis: # create an in-memory database container called redis
+    image: "redis:alpine" # pulled from Docker Hub.
+    networks:
+      counter-net:
+
+  networks: # create new networks, bridge by default
+    counter-net:
+
+  volumes: # create new volumes
+    counter-vol:
+```
+
+note:
+
+- 4 top-level keys: version, services, networks, volumes, (secrets, configs...)
+- use the driver property to specify different network types:
+
+```yml
+networks:
+  over-net:
+  driver: overlay
+  attachable: true # for standalone containers(instead of Docker Services)
+```
+
+source: https://github.com/nigelpoulton/counter-app
+
+### Run compose app
+
+```bash
+$ docker-compose up # docker-compose.yml in current folder
+$ docker-compose up & # ctrl+c doesn't kill container
+$ docker-compose up -d # run in daemon
+$ docker-compose -f prod-equus-bass.yml up # -f flag
+```
+
+check the current state of the app by `docker-compose ps`.
+
+list the processes running inside of each
+service (container) by `docker-compose top`.
+
+### Stop, Restart and Delete App
+
+stop without deleting:
+
+```bash
+$ docker-compose stop
+```
+
+could restart by:
+
+```bash
+$ docker-compose restart
+```
+
+If changed app after stopping, these changes won't apply in restarted app. Need to re-deploy.
+
+delete a stopped Compose app and networks:
+
+```bash
+$ docker-compose rm
+```
+
+stop and delete containers and networks by:
+
+```bash
+$ docker-compose down
+```
+
+## Stack
 
 swarm only
 
@@ -868,7 +1140,7 @@ stacks manage a bunch of services as a single app, highest layer of docker appli
 
 ![stack](/photos/docker-note/stack.png)
 
-Can run on Docker CLI, Docker UCP, Docker Cloud. 
+Can run on Docker CLI, Docker UCP, Docker Cloud.
 
 stack file: YAML config file including **version**, **services**, **network**, **volumes**, documenting the app. Can do version control.
 
@@ -878,9 +1150,9 @@ stack file: YAML config file including **version**, **services**, **network**, *
 version: "3" # >=3
 services:
   redis: # service 1st
-    image: redis:alpine # 
+    image: redis:alpine #
     networks:
-      - frontend 
+      - frontend
     deploy: # new in version 3
       replicas: 1
       update_config:
@@ -968,27 +1240,30 @@ networks:
 volumes:
   db-data:
 ```
+
 source: https://github.com/dockersamples/example-voting-app/docker-stack.yml
 
-Then deploy the app by:
+Check [Compose file version 3 reference](https://docs.docker.com/compose/compose-file/)
+
+### Deploy the stack
 
 ```bash
 $ docker stack deploy -c <stackfile> <stack> # -c: compose file
 ```
 
-check by `docker stack ls`, `docker stack ps <stack>`, `docker stack services <stack>`
+### Check status
 
-rescale service by CLI:
-
-``` bash
-$ docker service scale <stack>_<service>=20
+```bash
+$ docker stack ls
+$ docker stack ps <stack>
+$ docker stack services <stack>
 ```
 
-then check by `docker stack services <stack>`, `docker service inspect <stack>_<service> --pretty`, look at Replicas section.
+### Update stack
 
-better way is to update config file, and redeploy by:
+update config file, and re-deploy by:
 
-``` bash
+```bash
 $ docker stack deploy -c <stackfile> <stack>
 ```
 
@@ -1028,7 +1303,7 @@ after update the image in local, need to push into registry.
 
 Tag the updated image:
 
-``` bash
+```bash
 $ docker image tag <image> <dtr-dns>/<repo>/<image>:latest
 ```
 
@@ -1036,15 +1311,15 @@ check by `docker image ls` to see a new tagged image.
 
 login:
 
-``` bash
+```bash
 $  docker login <dtr-dns> # username, passwork, user needs permission to write in the repo
 ```
 
 ensure image scanning sets to "scan on push" in UCP's DTR's repo setting. Then push:
 
-``` bash
+```bash
 $ docker image push <tagged-image>
-``` 
+```
 
 Check in DTR's repo's images' vulnerabilities field.
 
