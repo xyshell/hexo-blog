@@ -66,18 +66,46 @@ $ docker container create --network <network> -p 8080:8080 <container>
 
 - [Mount volumes](https://docs.docker.com/storage/volumes/)
 
+to attach volume to a container, either by --mount or -v:
+
+```bash
+$ docker run -d --name <container> --mount source=<volume>,target=/vol <image>
+$ docker run -d --name <container> -v <volume>:/vol <image>
+```
+
+- [Describe and demonstrate how to run replicated and global services](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/#replicated-and-global-services)
+
+```bash
+$ docker service create --replicas 5 <service> # default replicated mode
+$ docker service create --mode global <service> # global mode
+```
+
+- [Apply node labels to demonstrate placement of tasks](https://success.docker.com/article/using-contraints-and-labels-to-control-the-placement-of-containers)
+
+- [Describe and demonstrate how to use templates with “docker service create”](https://docs.docker.com/engine/reference/commandline/service_create/#create-services-using-templates)
+
+only `--hostname`,`--mount`,`--env` support templates, e.x.:
+```bash
+$ docker service create \
+    --name hosttempl \
+    --hostname="{{.Node.Hostname}}-{{.Node.ID}}-{{.Service.Name}}" \ # container naming pattern 
+    busybox top
+```
+
+- [Identify the steps needed to troubleshoot a service not deploying](https://success.docker.com/article/swarm-troubleshooting-methodology)
+
+```bash
+$ docker service ls
+$ docker service ps <service>
+$ docker service inspect <service>
+$ docker inspect <task>
+$ docker inspect <container>
+$ docker logs <container>
+```
 
 - [Demonstrate steps to lock a swarm cluster](https://docs.docker.com/engine/swarm/swarm_manager_locking/)
 
-
-
-
-- [Illustrate running a replicated vs global service](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/#replicated-and-global-services)
-- [Identify the steps needed to troubleshoot a service not deploying](https://success.docker.com/article/swarm-troubleshooting-methodology)
-- [Apply node labels to demonstrate placement of tasks](https://docs.docker.com/engine/reference/commandline/node_update/)
 - [Sketch how a Dockerized application communicates with legacy systems](https://docs.docker.com/config/containers/container-networking/)
-
-- [Demonstrate the usage of templates with "docker service create"](https://docs.docker.com/engine/reference/commandline/service_create/#create-services-using-templates)
 
 ## Domain 2: Image Creation, Management, and Registry (20% of exam)
 - [Describe Dockerfile options (add, copy, volumes, expose, entrypoint, etc)](https://docs.docker.com/engine/reference/builder/#from)

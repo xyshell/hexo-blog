@@ -185,6 +185,11 @@ Layer structure, e.x.:
 ```bash
 $ docker image ls  / $ docker images
 $ docker image ls --digests # get sha256
+$ docker image ls --filter dangling=true # get <none>:<none>
+$ docker image ls --filter=reference="*:latest"
+$ docker image ls --format "{{.Size}}"
+$ docker image ls --format "{{.Repository}}: {{.Tag}}: {{.Size}}"
+$ docker image ls --format "{{json .}}" # print in json format
 ```
 
 to see operation history of one image, run:
@@ -206,6 +211,8 @@ $ docker image inspect redis
 ```bash
 $ docker image rm redis
 $ docker rmi alpine
+$ docker image prune # delete all dangle images
+$ docker image prune -a # delete all unused images, not used by any container
 ```
 
 ## Registries
@@ -585,6 +592,17 @@ CA Configuration:
   Expiry Duration: 2 days
 ```
 
+### Update a node
+
+Add label metadata to a node by:
+
+```bash
+$ docker node update --label-add foo worker1
+$ docker node update --label-add foo --label-add bar worker1
+```
+
+then node labels used a placement constraint when creating service.
+
 ### Orchestration intro
 
 ![orchestration_intro](/photos/docker-note/orchestration_intro.png)
@@ -593,18 +611,27 @@ CA Configuration:
 
 ## Services
 
+There are two types of service deployments, replicated and global:
+
+- For a replicated service, you specify the number of identical tasks you want to run. For example, you decide to deploy an HTTP service with three replicas, each serving the same content.
+- A global service is a service that runs one task on every node. There is no pre-specified number of tasks. Each time you add a node to the swarm, the orchestrator creates a task and the scheduler assigns the task to the new node. Good candidates for global services are monitoring agents, an anti-virus scanners or other types of containers that you want to run on every node in the swarm.
+
 ### Create service
 
 ```bash
-$ docker service create --mode global # global mode
+$ docker service create --replicas 5 <service> # default replicated mode
+$ docker service create --mode global <service> # global mode
 ```
 
 ### Check status
 
 ```bash
 $ docker service ls # list all services
-$ docker service ps <service> # check which nodes are running the service
+$ docker service ps <service> # list all tasks
 $ docker service inspect <service> --pretty # details
+$ docker service inspect <service> | jq -r '.[].CreatedAt' 
+$ docker service ps <service> --format "{{json .}}" --filter "desired-state=running" | jq -r .ID
+$ docker inspect <task> | jq -r '.[].Status.ContainerStatus.ContainerID'
 ```
 
 ### Remove services
@@ -1140,9 +1167,9 @@ stacks manage a bunch of services as a single app, highest layer of docker appli
 
 ![stack](/photos/docker-note/stack.png)
 
-Can run on Docker CLI, Docker UCP, Docker Cloud.
+can run on Docker CLI, Docker UCP, Docker Cloud.
 
-stack file: YAML config file including **version**, **services**, **network**, **volumes**, documenting the app. Can do version control.
+docker-stack.yml: YAML config file including **version**, **services**, **network**, **volumes**, documenting the app. Can do version control.
 
 ![stack_file](/photos/docker-note/stack_file.png)
 
@@ -1244,6 +1271,35 @@ volumes:
 source: https://github.com/dockersamples/example-voting-app/docker-stack.yml
 
 Check [Compose file version 3 reference](https://docs.docker.com/compose/compose-file/)
+
+Placement constraints:
+
+- Node ID: node.id == o2p4kw2uuw2a
+- Node name: node.hostname == wrk-12
+- Role: node.role != manager
+- Engine labels: engine.labels.operatingsystem==ubuntu 16.04
+- Custom node labels: node.labels.zone == prod1 **zone: prod1**
+
+`service.<service>.deploy.update_config`:
+```yml
+update_config:
+  parallelism: 2 # update two replicas at-atime
+  failure_action: rollback # [pause, continue, rollback]
+```
+
+`services.<service>.deploy.restart-policy`:
+```yml
+restart_policy:
+  condition: on-failure # non-zero exit code
+  delay: 5s # between each of the restart attempts
+  max_attempts: 3 
+  window: 120s # wait up to 120 seconds to decide if the restart worked
+```
+
+`services.<service>.stop_grace_period`:
+```yml
+stop_grace_period: 1m30s # for PID 1 to handle SIGTERM, default 10s, then SIGKILL.
+```
 
 ### Deploy the stack
 
