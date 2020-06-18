@@ -1304,7 +1304,7 @@ stop_grace_period: 1m30s # for PID 1 to handle SIGTERM, default 10s, then SIGKIL
 ### Deploy the stack
 
 ```bash
-$ docker stack deploy -c <stackfile> <stack> # -c: compose file
+$ docker stack deploy -c <stackfile> <stack> # -c: --compose-file
 ```
 
 ### Check status

@@ -88,7 +88,7 @@ only `--hostname`,`--mount`,`--env` support templates, e.x.:
 ```bash
 $ docker service create \
     --name hosttempl \
-    --hostname="{{.Node.Hostname}}-{{.Node.ID}}-{{.Service.Name}}" \ # container naming pattern 
+    --hostname="{{.Node.Hostname}}-{{.Node.ID}}-{{.Service.Name}}" \ # default container ID
     busybox top
 ```
 
@@ -103,9 +103,20 @@ $ docker inspect <container>
 $ docker logs <container>
 ```
 
-- [Demonstrate steps to lock a swarm cluster](https://docs.docker.com/engine/swarm/swarm_manager_locking/)
+- [Describe how a Dockerized application communicates with legacy systems](https://docs.docker.com/config/containers/container-networking/)
 
-- [Sketch how a Dockerized application communicates with legacy systems](https://docs.docker.com/config/containers/container-networking/)
+use a bridge, an overlay, a macvlan network, or a custom network plugin.
+
+- [Describe how to deploy containerized workloads as Kubernetes pods and deployments](https://docs.docker.com/get-started/kube-deploy/)
+
+```bash
+$ kubectl apply -f bb.yaml
+$ kubectl get deployments # docker stack ps <stack>
+$ kubectl get services # docker service ls
+$ kubectl delete -f bb.yaml
+```
+
+- [Describe how to provide configuration to Kubernetes pods using configMaps and secrets](https://opensource.com/article/19/6/introduction-kubernetes-secrets-and-configmaps)
 
 ## Domain 2: Image Creation, Management, and Registry (20% of exam)
 - [Describe Dockerfile options (add, copy, volumes, expose, entrypoint, etc)](https://docs.docker.com/engine/reference/builder/#from)
