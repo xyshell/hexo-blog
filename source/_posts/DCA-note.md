@@ -11,7 +11,7 @@ toc: true
 
 - [Complete the setup of a swarm mode cluster, with managers and worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/)
 
-``` bash
+```bash
 $ docker swarm init
 $ docker swarm join-token manager / $ docker swarm join-token worker
 $ docker swarm join --token <token> <ip>:<port>
@@ -19,16 +19,16 @@ $ docker swarm join --token <token> <ip>:<port>
 
 - [Describe and demonstrate how to extend the instructions to run individual containers into running services under swarm](https://docs.docker.com/engine/swarm/swarm-tutorial/deploy-service/)
 
-``` bash
+```bash
 $ docker service create --replicas 1 --name <service> <image> <cmd>
 $ docker service ls
 ```
 
 - [Describe the importance of quorum in a swarm cluster.](https://docs.docker.com/engine/swarm/raft/)
 
-    - [Raft Consensus Algorithm](http://thesecretlivesofdata.com/raft/) to make sure all the manager nodes in charge of managing and scheduling tasks in the cluster, are storing the same consistent state. 
-    - Having the same consistent state across the cluster means that in case of a failure, any Manager node can pick up the tasks and restore the services to a stable state.
-    - Raft tolerates up to (N-1)/2 failures and requires a majority or quorum of (N/2)+1 members to agree on values proposed to the cluster.
+  - [Raft Consensus Algorithm](http://thesecretlivesofdata.com/raft/) to make sure all the manager nodes in charge of managing and scheduling tasks in the cluster, are storing the same consistent state.
+  - Having the same consistent state across the cluster means that in case of a failure, any Manager node can pick up the tasks and restore the services to a stable state.
+  - Raft tolerates up to (N-1)/2 failures and requires a majority or quorum of (N/2)+1 members to agree on values proposed to the cluster.
 
 - [Describe the difference between running a container and running a service.](https://docs.docker.com/engine/swarm/how-swarm-mode-works/services/#services-tasks-and-containers)
 
@@ -36,7 +36,7 @@ Service -> tasks - containers
 
 - [Interpret the output of “docker inspect” commands](https://docs.docker.com/engine/swarm/swarm-tutorial/inspect-service/)
 
-``` bash
+```bash
 $ docker service|container|network|... inpsect --pretty <name>
 ```
 
@@ -57,9 +57,10 @@ Tools to manage, scale, and maintain containerized applications are called orche
 ```bash
 $ docker service scale <service>=20
 ```
-- [Add networks, publish ports](https://docs.docker.com/network/) 
 
-``` bash
+- [Add networks, publish ports](https://docs.docker.com/network/)
+
+```bash
 $ docker network create -d <driver> <network>
 $ docker container create --network <network> -p 8080:8080 <container>
 ```
@@ -85,6 +86,7 @@ $ docker service create --mode global <service> # global mode
 - [Describe and demonstrate how to use templates with “docker service create”](https://docs.docker.com/engine/reference/commandline/service_create/#create-services-using-templates)
 
 only `--hostname`,`--mount`,`--env` support templates, e.x.:
+
 ```bash
 $ docker service create \
     --name hosttempl \
@@ -111,14 +113,203 @@ use a bridge, an overlay, a macvlan network, or a custom network plugin.
 
 ```bash
 $ kubectl apply -f bb.yaml
-$ kubectl get deployments # docker stack ps <stack>
-$ kubectl get services # docker service ls
-$ kubectl delete -f bb.yaml
+$ kubectl get pods
+$ kubectl get deploy
+$ kubectl edit deploy/mysite # edit existing objects, automatic update
+$ kubectl scale --replicas=2 deploy/mysite # rescale
+$ kubectl delete -f bb.yaml / kubectl delete deploy mysite
 ```
 
 - [Describe how to provide configuration to Kubernetes pods using configMaps and secrets](https://opensource.com/article/19/6/introduction-kubernetes-secrets-and-configmaps)
 
+### Secret
+
+create the YAML file for the Secret, save as mysql-secret.yaml:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-root-password
+type: Opaque
+data:
+  password: S3ViZXJuZXRlc1JvY2tzIQ==
+```
+
+create the Secret in Kubernetes:
+
+```bash
+$ kubectl apply -f mysql-secret.yaml
+```
+
+view the newly created Secret:
+
+```bash
+$ kubectl describe secret mariadb-root-password
+```
+
+view and edit the Secret:
+
+```bash
+$ kubectl edit secret <secretname>
+```
+
+could also create the secret by:
+
+```bash
+$ kubectl create secret generic mariadb-user-creds \
+      --from-literal=MYSQL_USER=kubeuser\
+      --from-literal=MYSQL_PASSWORD=kube-still-rocks
+```
+
+validate secrets were created and stored correctly:
+
+```bash
+# Get the username
+$ kubectl get secret mariadb-user-creds -o jsonpath='{.data.MYSQL_USER}' | base64 --decode -
+kubeuser
+
+# Get the password
+$ kubectl get secret mariadb-user-creds -o jsonpath='{.data.MYSQL_PASSWORD}' | base64 --decode -
+kube-still-rocks
+```
+
+### ConfigMap
+
+create a file named max_allowed_packet.cnf:
+
+```cnf
+[mysqld]
+max_allowed_packet = 64M
+```
+
+create configmap by:
+
+```bash
+$ kubectl create configmap mariadb-config --from-file=max_allowed_packet.cnf # could add multiple --from-file=<filename>
+$ kubectl create configmap mariadb-config --from-file=max-packet=max_allowed_packet.cnf # set max-packet as key rather than the file name
+configmap/mariadb-config created
+```
+
+Firstvalidate that the ConfigMap was created:
+
+```bash
+$ kubectl get configmap mariadb-config
+```
+
+viewed with the kubectl describe command:
+
+```bash
+$ kubectl describe cm mariadb-config
+```
+
+edit configmap mariadb-config's value:(in development)
+
+```bash
+$ kubectl edit configmap mariadb-config
+```
+
+### Using Secrets and ConfigMaps
+
+Create a file named mariadb-deployment.yaml:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mariadb
+  name: mariadb-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+        - name: mariadb
+          image: docker.io/mariadb:10.4
+        #   env:
+        #     - name: MYSQL_ROOT_PASSWORD
+        #     valueFrom:
+        #         secretKeyRef:
+        #             name: mariadb-root-password
+        #             key: password
+        #   envFrom:
+        #   - secretRef:
+        #     name: mariadb-user-creds
+          ports:
+            - containerPort: 3306
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: mariadb-volume-1
+            # - mountPath: /etc/mysql/conf.d
+            #   name: mariadb-config-volume
+      volumes:
+        - emptyDir: {}
+          name: mariadb-volume-1
+        # - configMap:
+        #   name: mariadb-config
+        #   items:
+        #     - key: max_allowed_packet.cnf
+        #       path: max_allowed_packet.cnf
+        #   name: mariadb-config-volume
+```
+
+add the Secrets to the Deployment as environment variables, same for ConfigMaps by using configMapRef instead of secretKeyRef:
+```yaml
+env:
+  - name: MYSQL_ROOT_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: mariadb-root-password
+        key: password
+```
+
+or using envFrom:
+```yaml
+envFrom:
+- secretRef:
+    name: mariadb-user-creds
+```
+
+create a new MariaDB instance from the YAML file:
+```yaml
+$ kubectl create -f mariadb-deployment.yaml
+deployment.apps/mariadb-deployment created
+```
+
+view the running MariaDB pod:
+```bash
+$ kubectl get pods
+```
+
+kubectl exec to the Pod, validate Secrets and ConfigMaps are in use:
+
+```bash
+$ kubectl exec -it mariadb-deployment-5465c6655c-7jfqm env |grep MYSQL
+MYSQL_PASSWORD=kube-still-rocks
+MYSQL_USER=kubeuser
+MYSQL_ROOT_PASSWORD=KubernetesRocks!
+```
+
+check max_allowed_packet.cnf file was created in /etc/mysql/conf.d:
+```bash
+$ kubectl exec -it mariadb-deployment-5465c6655c-7jfqm ls /etc/mysql/conf.d
+max_allowed_packet.cnf
+
+$ kubectl exec -it mariadb-deployment-5465c6655c-7jfqm cat /etc/mysql/conf.d/max_allowed_packet.cnf
+[mysqld]
+max_allowed_packet = 32M
+```
+
 ## Domain 2: Image Creation, Management, and Registry (20% of exam)
+
 - [Describe Dockerfile options (add, copy, volumes, expose, entrypoint, etc)](https://docs.docker.com/engine/reference/builder/#from)
 - [Show the main parts of a Dockerfile](https://docs.docker.com/engine/reference/builder/#dockerfile-examples)
 - [Give examples on how to create an efficient image via a Dockerfile](https://docs.docker.com/engine/userguide/eng-image/dockerfile_best-practices/)
@@ -142,9 +333,10 @@ $ kubectl delete -f bb.yaml
 - [Delete an image from a registry](https://docs.docker.com/datacenter/dtr/2.0/repos-and-images/delete-an-image/)
 
 ## Domain 3: Installation and Configuration (15% of exam)
+
 - [Demonstrate the ability to upgrade the Docker engine](https://docs.docker.com/install/linux/docker-ce/ubuntu/#upgrade-docker-engine---community)
 - [Complete setup of repo, select a storage driver, and complete installation of Docker
-engine on multiple platforms](https://docs.docker.com/install/)
+  engine on multiple platforms](https://docs.docker.com/install/)
 - [Configure logging drivers (splunk, journald, etc)](https://docs.docker.com/config/containers/logging/configure/)
 - [Setup swarm, configure managers, add nodes, and setup backup schedule](https://docs.docker.com/engine/swarm/admin_guide/)
 - [Create and manage user and teams](https://docs.docker.com/datacenter/dtr/2.4/guides/admin/manage-users/create-and-manage-teams/)
@@ -152,30 +344,32 @@ engine on multiple platforms](https://docs.docker.com/install/)
 - [Outline the sizing requirements prior to installation](https://docs.docker.com/datacenter/ucp/2.2/guides/admin/install/system-requirements/#hardware-and-software-requirements)
 - [Understand namespaces, cgroups, and configuration of certificates](https://docs.docker.com/engine/docker-overview/#namespaces)
 - [Use certificate-based client-server authentication to ensure a Docker daemon has the
-rights to access images on a registry](https://docs.docker.com/engine/security/certificates/)
+  rights to access images on a registry](https://docs.docker.com/engine/security/certificates/)
 - Consistently repeat steps to deploy Docker engine, UCP, and DTR on AWS and on
-premises in an HA config. [Docker,](https://docs.docker.com/install/linux/docker-ce/ubuntu/) [DTR,](https://docs.docker.com/datacenter/dtr/2.3/guides/admin/install/) [UCP,](https://docs.docker.com/ee/ucp/), [Docker on AWS](https://docs.docker.com/docker-for-aws/) and possibly [on premises HA config](https://docs.docker.com/engine/swarm/admin_guide/#add-manager-nodes-for-fault-tolerance)
+  premises in an HA config. [Docker,](https://docs.docker.com/install/linux/docker-ce/ubuntu/) [DTR,](https://docs.docker.com/datacenter/dtr/2.3/guides/admin/install/) [UCP,](https://docs.docker.com/ee/ucp/), [Docker on AWS](https://docs.docker.com/docker-for-aws/) and possibly [on premises HA config](https://docs.docker.com/engine/swarm/admin_guide/#add-manager-nodes-for-fault-tolerance)
 - [Complete configuration of backups for UCP and DTR](https://docs.docker.com/datacenter/ucp/2.2/guides/admin/backups-and-disaster-recovery/)
 - [Configure the Docker daemon to start on boot](https://docs.docker.com/install/linux/linux-postinstall/)
 
 ## Domain 4: Networking (15% of exam)
+
 - [Create a Docker bridge network for a developer to use for their containers](https://docs.docker.com/network/network-tutorial-standalone/)
 - [Troubleshoot container and engine logs to understand a connectivity issue between
-containers](https://success.docker.com/article/troubleshooting-container-networking)
+  containers](https://success.docker.com/article/troubleshooting-container-networking)
 - [Publish a port so that an application is accessible externally](https://github.com/wsargent/docker-cheat-sheet#exposing-ports)
 - [Identify which IP and port a container is externally accessible on](https://docs.docker.com/engine/reference/commandline/port/#examples)
 - [Describe the different types and use cases for the built-in network drivers](https://blog.docker.com/2016/12/understanding-docker-networking-drivers-use-cases/)
 - [Understand the Container Network Model and how it interfaces with the Docker engine
-and network and IPAM drivers](https://success.docker.com/article/networking/)
+  and network and IPAM drivers](https://success.docker.com/article/networking/)
 - [Configure Docker to use external DNS](https://gist.github.com/Evalle/7b21e0357c137875a03480428a7d6bf6)
 - [Use Docker to load balance HTTP/HTTPs traffic to an application (Configure L7 load
-balancing with Docker EE)](https://docs.docker.com/datacenter/ucp/2.2/guides/admin/configure/use-a-load-balancer/#configuration-examples)
+  balancing with Docker EE)](https://docs.docker.com/datacenter/ucp/2.2/guides/admin/configure/use-a-load-balancer/#configuration-examples)
 - [Understand and describe the types of traffic that flow between the Docker engine,
-registry, and UCP controllers](https://success.docker.com/article/networking/)
+  registry, and UCP controllers](https://success.docker.com/article/networking/)
 - [Deploy a service on a Docker overlay network](https://docs.docker.com/network/overlay/)
 - Describe the difference between "host" and "ingress" port publishing mode ([Host](https://docs.docker.com/engine/swarm/services/#publish-a-services-ports-directly-on-the-swarm-node), [Ingress](https://docs.docker.com/engine/swarm/ingress/))
 
 ## Domain 5: Security (15% of exam)
+
 - [Describe the process of signing an image](https://docs.docker.com/engine/security/trust/content_trust/#push-trusted-content)
 - [Demonstrate that an image passes a security scan](https://docs.docker.com/datacenter/dtr/2.5/guides/admin/configure/set-up-vulnerability-scans/)
 - [Enable Docker Content Trust](https://docs.docker.com/engine/security/trust/content_trust/)
@@ -190,14 +384,14 @@ registry, and UCP controllers](https://success.docker.com/article/networking/)
 - Describe process to use external certificates with UCP and DTR (**UCP** [from cli](https://success.docker.com/article/how-do-i-provide-an-externally-generated-security-certificate-during-the-ucp-command-line-installation), [from GUI](https://docs.docker.com/ee/ucp/admin/configure/use-your-own-tls-certificates/#configure-ucp-to-use-your-own-tls-certificates-and-keys), [print the public certificates](https://docs.docker.com/datacenter/ucp/3.0/reference/cli/dump-certs/)), [**DTR**](https://docs.docker.com/ee/dtr/admin/configure/use-your-own-tls-certificates/))
 
 ## Domain 6: Storage and Volumes (10% of exam)
+
 - [State which graph driver should be used on which OS](https://docs.docker.com/storage/storagedriver/select-storage-driver/)
 - [Demonstrate how to configure devicemapper](https://docs.docker.com/storage/storagedriver/device-mapper-driver/#configure-docker-with-the-devicemapper-storage-driver)
 - [Compare object storage to block storage, and explain which one is preferable when
-available](https://rancher.com/block-object-file-storage-containers/)
+  available](https://rancher.com/block-object-file-storage-containers/)
 - [Summarize how an application is composed of layers and where those layers reside on
-the filesystem](https://docs.docker.com/storage/storagedriver/#images-and-layers)
+  the filesystem](https://docs.docker.com/storage/storagedriver/#images-and-layers)
 - [Describe how volumes are used with Docker for persistent storage](https://docs.docker.com/storage/volumes/)
 - Identify the steps you would take to clean up unused images on a filesystem, also on DTR.
-([image prune](https://docs.docker.com/engine/reference/commandline/image_prune/), [system prune](https://docs.docker.com/engine/reference/commandline/system_prune/) and [from DTR](https://docs.docker.com/ee/dtr/user/manage-images/delete-images/))
+  ([image prune](https://docs.docker.com/engine/reference/commandline/image_prune/), [system prune](https://docs.docker.com/engine/reference/commandline/system_prune/) and [from DTR](https://docs.docker.com/ee/dtr/user/manage-images/delete-images/))
 - [Demonstrate how storage can be used across cluster nodes](https://docs.docker.com/engine/extend/legacy_plugins/#volume-plugins)
-
