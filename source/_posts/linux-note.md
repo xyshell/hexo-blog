@@ -13,3 +13,12 @@ ssh -i <path-to-pem> admin@<ip/dns>
 ``` bash
 scp -i <path-to-pem> <path-to-source-file> admin@<ip/dns>:/home/admin/<path-to-target-file>
 ``` 
+
+# Auto-start after reboot
+```bash
+$ systemctl enable docker
+Synchronizing state of docker.service...
+Executing /lib/systemd/systemd-sysv-install enable docker
+$ systemctl is-enabled docker
+enabled
+```

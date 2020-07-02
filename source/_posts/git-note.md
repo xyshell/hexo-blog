@@ -4,6 +4,9 @@ date: 2020-06-08 00:50:13
 tags: git
 toc: true
 ---
+# Git Object Model
+
+![git-obj-mdl](/photos/git-note/git-obj-mdl.png)
 
 # Git Submodule
 
