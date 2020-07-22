@@ -9,6 +9,11 @@ tags:
 ssh -i <path-to-pem> admin@<ip/dns>
 ``` 
 
+Local Port Forwarding:
+``` bash
+ssh -i <path-to-pem> -l admin <ip/dns> -L 9999:localhost:9999
+```
+
 # SCP
 ``` bash
 scp -i <path-to-pem> <path-to-source-file> admin@<ip/dns>:/home/admin/<path-to-target-file>
