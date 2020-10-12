@@ -167,3 +167,152 @@ def lambda_handler(event, context):
             instance.stop()
             print('stopped instance:', instance.id)
 ```
+
+## Backing Up EC2 Instances
+
+![Backing-Up-EC2-Instances](/photos/aws-note/Backing-Up-EC2-Instances.png)
+
+### Create-Backups
+
+```python
+
+from datetime import datetime
+
+import boto3
+
+
+def lambda_handler(event, context):
+
+    ec2_client = boto3.client('ec2')
+    regions = [region['RegionName']
+               for region in ec2_client.describe_regions()['Regions']]
+
+    for region in regions:
+
+        print('Instances in EC2 Region {0}:'.format(region))
+        ec2 = boto3.resource('ec2', region_name=region)
+
+        instances = ec2.instances.filter(
+            Filters=[
+                {'Name': 'tag:backup', 'Values': ['true']}
+            ]
+        )
+
+        # ISO 8601 timestamp, i.e. 2019-01-31T14:01:58
+        timestamp = datetime.utcnow().replace(microsecond=0).isoformat()
+
+        for i in instances.all():
+            for v in i.volumes.all():
+
+                desc = 'Backup of {0}, volume {1}, created {2}'.format(
+                    i.id, v.id, timestamp)
+                print(desc)
+
+                snapshot = v.create_snapshot(Description=desc)
+
+                print("Created snapshot:", snapshot.id)
+```
+
+### Prune-Backups
+
+```python
+import boto3
+
+
+def lambda_handler(event, context):
+
+    account_id = boto3.client('sts').get_caller_identity().get('Account')
+    ec2 = boto3.client('ec2')
+    regions = [region['RegionName']
+               for region in ec2.describe_regions()['Regions']]
+
+    for region in regions:
+        print("Region:", region)
+        ec2 = boto3.client('ec2', region_name=region)
+        response = ec2.describe_snapshots(OwnerIds=[account_id])
+        snapshots = response["Snapshots"]
+
+        # Sort snapshots by date ascending
+        snapshots.sort(key=lambda x: x["StartTime"])
+
+        # Remove snapshots we want to keep (i.e. 3 most recent)
+        snapshots = snapshots[:-3]
+
+        for snapshot in snapshots:
+            id = snapshot['SnapshotId']
+            try: # EBS might be using this snapshot
+                print("Deleting snapshot:", id)
+                ec2.delete_snapshot(SnapshotId=id)
+            except Exception as e:
+                print("Snapshot {} in use, skipping.".format(id))
+                continue
+```
+
+### Removing Unattached EBS Volumes
+
+```python
+import boto3
+
+
+def lambda_handler(object, context):
+
+    # Get list of regions
+    ec2_client = boto3.client('ec2')
+    regions = [region['RegionName']
+               for region in ec2_client.describe_regions()['Regions']]
+
+    for region in regions:
+        ec2 = boto3.resource('ec2', region_name=region)
+        print("Region:", region)
+
+        # List only unattached volumes ('available' vs. 'in-use')
+        volumes = ec2.volumes.filter(
+            Filters=[{'Name': 'status', 'Values': ['available']}])
+
+        for volume in volumes:
+            v = ec2.Volume(volume.id)
+            print("Deleting EBS volume: {}, Size: {} GiB".format(v.id, v.size))
+            v.delete()
+```
+
+### Deregistering Old AMIs
+
+```python
+import datetime
+from dateutil.parser import parse
+
+import boto3
+
+
+def days_old(date):
+    parsed = parse(date).replace(tzinfo=None)
+    diff = datetime.datetime.now() - parsed
+    return diff.days
+
+
+def lambda_handler(event, context):
+
+    # Get list of regions
+    ec2_client = boto3.client('ec2')
+    regions = [region['RegionName']
+               for region in ec2_client.describe_regions()['Regions']]
+
+    for region in regions:
+        ec2 = boto3.client('ec2', region_name=region)
+        print("Region:", region)
+
+        amis = ec2.describe_images(Owners=['self'])['Images']
+
+        for ami in amis:
+            creation_date = ami['CreationDate']
+            age_days = days_old(creation_date)
+            image_id = ami['ImageId']
+            print('ImageId: {}, CreationDate: {} ({} days old)'.format(
+                image_id, creation_date, age_days))
+
+            if age_days >= 2:
+                print('Deleting ImageId:', image_id)
+
+                # Deregister the AMI
+                ec2.deregister_image(ImageId=image_id)
+```
