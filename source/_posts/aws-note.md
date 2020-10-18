@@ -702,3 +702,226 @@ table = dynamodb.Table('Movies')
 
 table.delete()
 ```
+
+# Boto3 - S3
+
+This chapter follows https://github.com/linuxacademy/content-lambda-boto3
+
+## Resizing Images
+
+![Resizing-Images](/photos/aws-note/Resizing-Images.png)
+
+```python
+import os
+import tempfile
+
+import boto3
+from PIL import Image
+
+s3 = boto3.client('s3')
+DEST_BUCKET = os.environ['DEST_BUCKET']
+SIZE = 128, 128
+
+
+def lambda_handler(event, context):
+
+    for record in event['Records']:
+        source_bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+        thumb = 'thumb-' + key
+        with tempfile.TemporaryDirectory() as tmpdir:
+            download_path = os.path.join(tmpdir, key)
+            upload_path = os.path.join(tmpdir, thumb)
+            s3.download_file(source_bucket, key, download_path)
+            generate_thumbnail(download_path, upload_path)
+            s3.upload_file(upload_path, DEST_BUCKET, thumb)
+
+        print('Thumbnail image saved at {}/{}'.format(DEST_BUCKET, thumb))
+
+
+def generate_thumbnail(source_path, dest_path):
+    print('Generating thumbnail from:', source_path)
+    with Image.open(source_path) as image:
+        image.thumbnail(SIZE)
+        image.save(dest_path)
+```
+
+To get pillow pkg, find it at https://pypi.org/project/Pillow/
+
+```bash
+unzip Pillow-5.4.1-cp37-cp37m-manylinux1_x86_64.whl
+```
+
+```bash
+rm -rf Pillow-5.4.1.dist-info
+```
+
+```bash
+zip -r9 lambda.zip lambda_function.py PIL
+```
+
+upload the zip file to AWS Lambda.
+
+## Importing CSV Files into DynamoDB
+
+![Importing-CSV-Files-into-DynamoDB](/photos/aws-note/Importing-CSV-Files-into-DynamoDB.png)
+
+```python
+import csv
+import os
+import tempfile
+
+import boto3
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('Movies')
+s3 = boto3.client('s3')
+
+
+def lambda_handler(event, context):
+
+    for record in event['Records']:
+        source_bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+        with tempfile.TemporaryDirectory() as tmpdir:
+            download_path = os.path.join(tmpdir, key)
+            s3.download_file(source_bucket, key, download_path)
+            items = read_csv(download_path)
+
+            with table.batch_writer() as batch:
+                for item in items:
+                    batch.put_item(Item=item)
+
+
+def read_csv(file):
+    items = []
+    with open(file) as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            data = {}
+            data['Meta'] = {}
+            data['Year'] = int(row['Year'])
+            data['Title'] = row['Title'] or None
+            data['Meta']['Length'] = int(row['Length'] or 0)
+            data['Meta']['Subject'] = row['Subject'] or None
+            data['Meta']['Actor'] = row['Actor'] or None
+            data['Meta']['Actress'] = row['Actress'] or None
+            data['Meta']['Director'] = row['Director'] or None
+            data['Meta']['Popularity'] = row['Popularity'] or None
+            data['Meta']['Awards'] = row['Awards'] == 'Yes'
+            data['Meta']['Image'] = row['Image'] or None
+            data['Meta'] = {k: v for k,
+                            v in data['Meta'].items() if v is not None}
+            items.append(data)
+    return items
+
+```
+
+## Transcribing Audio
+
+![Transcribing-Audio](/photos/aws-note/Transcribing-Audio.png)
+
+TranscribeAudio:
+```python
+import boto3
+
+s3 = boto3.client('s3')
+transcribe = boto3.client('transcribe')
+
+
+def lambda_handler(event, context):
+
+    for record in event['Records']:
+        source_bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+        object_url = "https://s3.amazonaws.com/{0}/{1}".format(
+            source_bucket, key)
+        response = transcribe.start_transcription_job(
+            TranscriptionJobName='MyTranscriptionJob',
+            Media={'MediaFileUri': object_url},
+            MediaFormat='mp3',
+            LanguageCode='en-US'
+        )
+        print(response)
+```
+
+ParseTranscription:
+```python
+import json
+import os
+import urllib.request
+
+import boto3
+
+
+BUCKET_NAME = os.environ['BUCKET_NAME']
+
+s3 = boto3.resource('s3')
+transcribe = boto3.client('transcribe')
+
+
+def lambda_handler(event, context):
+    job_name = event['detail']['TranscriptionJobName']
+    job = transcribe.get_transcription_job(TranscriptionJobName=job_name)
+    uri = job['TranscriptionJob']['Transcript']['TranscriptFileUri']
+    print(uri)
+
+    content = urllib.request.urlopen(uri).read().decode('UTF-8')
+
+    print(json.dumps(content))
+
+    data = json.loads(content)
+
+    text = data['results']['transcripts'][0]['transcript']
+
+    object = s3.Object(BUCKET_NAME, job_name + '-asrOutput.txt')
+    object.put(Body=text)
+```
+
+## Detecting Faces with Rekognition
+
+![Detecting-Faces-with-Rekognition](/photos/aws-note/Detecting-Faces-with-Rekognition.png)
+
+```python
+import os
+
+import boto3
+
+TABLE_NAME = os.environ['TABLE_NAME']
+
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table(TABLE_NAME)
+s3 = boto3.resource('s3')
+rekognition = boto3.client('rekognition')
+
+
+def lambda_handler(event, context):
+
+    # Get the object from the event
+    bucket = event['Records'][0]['s3']['bucket']['name']
+    key = event['Records'][0]['s3']['object']['key']
+
+    obj = s3.Object(bucket, key)
+    image = obj.get()['Body'].read()
+    print('Recognizing celebrities...')
+    response = rekognition.recognize_celebrities(Image={'Bytes': image})
+
+    names = []
+
+    for celebrity in response['CelebrityFaces']:
+        name = celebrity['Name']
+        print('Name: ' + name)
+        names.append(name)
+
+    print(names)
+
+    print('Saving face data to DynamoDB table:', TABLE_NAME)
+    response = table.put_item(
+        Item={
+            'key': key,
+            'names': names,
+        }
+    )
+    print(response)
+```
+
