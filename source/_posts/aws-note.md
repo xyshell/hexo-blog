@@ -15,9 +15,10 @@ toc: true
 
 [Pricing Calculator](https://calculator.aws/#/)
 
-## Install the AWS CLI and Boto3
+## Install
 
-### Amazon Linux 2
+### AWS CLI and Boto3
+#### Amazon Linux 2
 
 The AWS CLI is already installed on Amazon Linux 2.
 
@@ -33,7 +34,7 @@ Install Boto3:
 pip3 install boto3 --user
 ```
 
-### macOS
+#### macOS
 
 Install Python3 using Homebrew:
 
@@ -63,6 +64,13 @@ Install the AWS CLI and Boto3:
 
 ```bash
 pip install awscli boto3 --upgrade --user
+```
+
+
+### Docker
+
+```bash
+sudo amazon-linux-extras install docker
 ```
 
 ## Configuring your AWS environment
@@ -104,13 +112,56 @@ The output should look like this:
 
 # AWS CLI
 
-## Upload folder to S3
+```bash
+aws configure
+aws sts get-caller-identity
+```
 
+## S3
+
+Upload folder to s3:
 ```bash
 aws s3 cp <path-to-source-folder> s3://<path-to-target-folder> --recursive --exclude ".DS_Store"
 ```
 
-# Boto3
+## Dynamodb
+
+create table:
+```bash
+aws dynamodb create-table \
+    --table-name Music \
+    --key-schema AttributeName=Artist,KeyType=HASH \
+                 AttributeName=SongTitle,KeyType=RANGE \    
+    --attribute-definitions \
+        AttributeName=Artist,AttributeType=S \
+        AttributeName=SongTitle,AttributeType=S \    
+    --provisioned-throughput \
+        ReadCapacityUnits=5,WriteCapacityUnits=5
+```
+
+describe table:
+```bash
+aws dynamodb describe-table --table-name Music
+```
+
+put item:
+```bash
+aws dynamodb put-item \
+    --table-name Music \
+    --item '{
+        "Artist": {"S": "Dream Theater"},
+        "AlbumTitle": {"S": "Images and Words"},        
+        "SongTitle": {"S": "Under a Glass Moon"} }'
+```
+
+scan table:
+```bash
+aws dynamodb scan --table-name Music
+```
+
+# Boto3 - EC2
+
+This section follows https://github.com/linuxacademy/content-dynamodb-deepdive
 
 ## HelloWorld
 
@@ -315,4 +366,339 @@ def lambda_handler(event, context):
 
                 # Deregister the AMI
                 ec2.deregister_image(ImageId=image_id)
+```
+
+# Boto3 - Dynamodb
+
+This chapter follows https://github.com/linuxacademy/content-lambda-boto3
+
+```python
+import boto3
+client = boto3.client('dynamodb', endpoint_url='http://localhost:8000') # dynamodb-local
+client.list_tables()
+```
+
+### Create Tables
+
+```python
+dynamodb = boto3.resource('dynamodb')
+
+table = dynamodb.create_table(
+    TableName='Movies',
+    KeySchema=[
+        {
+            'AttributeName': 'year',
+            'KeyType': 'HASH'  # Partition key
+        },
+        {
+            'AttributeName': 'title',
+            'KeyType': 'RANGE'  # Sort key
+        }
+    ],
+    AttributeDefinitions=[
+        {
+            'AttributeName': 'year',
+            'AttributeType': 'N'
+        },
+        {
+            'AttributeName': 'title',
+            'AttributeType': 'S'
+        },
+
+    ],
+    ProvisionedThroughput={
+        'ReadCapacityUnits': 5,
+        'WriteCapacityUnits': 5
+    }
+)
+
+print('Table status:', table.table_status)
+
+print('Waiting for', table.name, 'to complete creating...')
+table.meta.client.get_waiter('table_exists').wait(TableName='Movies')
+print('Table status:', dynamodb.Table('Movies').table_status)
+```
+
+### Load Data
+
+```python
+dynamodb = boto3.resource('dynamodb')
+
+table = dynamodb.Table('Movies')
+
+with open("moviedata.json") as json_file:
+    movies = json.load(json_file, parse_float=decimal.Decimal)
+    for movie in movies:
+        year = int(movie['year'])
+        title = movie['title']
+        info = movie['info']
+
+        print("Adding movie:", year, title)
+
+        table.put_item(
+            Item={
+                'year': year,
+                'title': title,
+                'info': info,
+            }
+        )
+```
+
+`moviedata.json`:
+```json
+[{
+    "year": 2013,
+    "title": "Rush",
+    "info": {
+      "directors": ["Ron Howard"],
+      "release_date": "2013-09-02T00:00:00Z",
+      "rating": 8.3,
+      "genres": [
+        "Action",
+        "Biography",
+        "Drama",
+        "Sport"
+      ],
+      "image_url": "http://ia.media-imdb.com/images/M/MV5BMTQyMDE0MTY0OV5BMl5BanBnXkFtZTcwMjI2OTI0OQ@@._V1_SX400_.jpg",
+      "plot": "A re-creation of the merciless 1970s rivalry between Formula One rivals James Hunt and Niki Lauda.",
+      "rank": 2,
+      "running_time_secs": 7380,
+      "actors": [
+        "Daniel Bruhl",
+        "Chris Hemsworth",
+        "Olivia Wilde"
+      ]
+    }
+  },
+]
+```
+
+### Put Item
+
+```python
+
+class DecimalEncoder(json.JSONEncoder):
+    '''Helper class to convert a DynamoDB item to JSON'''
+
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            if abs(o) % 1 > 0:
+                return float(o)
+            else:
+                return int(o)
+        return super(DecimalEncoder, self).default(o)
+
+title = "The Big New Movie"
+year = 2015
+
+response = table.put_item(
+    Item={
+        'year': year,
+        'title': title,
+        'info': {
+            'plot': "Nothing happens at all.",
+            'rating': decimal.Decimal(0)
+        }
+    }
+)
+print("PutItem succeeded:")
+print(json.dumps(response, indent=4, cls=DecimalEncoder))
+
+```
+
+### Get Item
+
+```python
+from botocore.exceptions import ClientError
+
+title = "The Big New Movie"
+year = 2015
+
+try:
+    response = table.get_item(
+        Key={
+            'year': year,
+            'title': title
+        }
+    )
+except ClientError as e:
+    print(e.response['Error']['Message'])
+else:
+    item = response['Item']
+    print("GetItem succeeded:")
+    print(json.dumps(item, indent=4, cls=DecimalEncoder))
+```
+
+### Update Item
+
+```python
+title = "The Big New Movie"
+year = 2015
+
+response = table.update_item(
+    Key={
+        'year': year,
+        'title': title
+    },
+    UpdateExpression="set info.rating = :r, info.plot=:p, info.actors=:a",
+    ExpressionAttributeValues={
+        ':r': decimal.Decimal(5.5),
+        ':p': "Everything happens all at once.",
+        ':a': ["Larry", "Moe", "Curly"]
+    },
+    ReturnValues="UPDATED_NEW"
+)
+
+print("UpdateItem succeeded:")
+print(json.dumps(response, indent=4, cls=DecimalEncoder))
+
+```
+
+```python
+title = "The Big New Movie"
+year = 2015
+
+response = table.update_item(
+    Key={
+        'year': year,
+        'title': title
+    },
+    UpdateExpression="set info.rating = info.rating + :val",
+    ExpressionAttributeValues={
+        ':val': decimal.Decimal(1)
+    },
+    ReturnValues="UPDATED_NEW"
+)
+
+print("UpdateItem succeeded:")
+print(json.dumps(response, indent=4, cls=DecimalEncoder))
+
+```
+
+```python
+title = "The Big New Movie"
+year = 2015
+
+# Conditional update (will fail)
+print("Attempting conditional update...")
+
+try:
+    response = table.update_item(
+        Key={
+            'year': year,
+            'title': title
+        },
+        UpdateExpression="remove info.actors[0]",
+        ConditionExpression="size(info.actors) >= :num",
+        ExpressionAttributeValues={
+            ':num': 3
+        },
+        ReturnValues="UPDATED_NEW"
+    )
+except ClientError as e:
+    if e.response['Error']['Code'] == "ConditionalCheckFailedException":
+        print(e.response['Error']['Message'])
+    else:
+        raise
+else:
+    print("UpdateItem succeeded:")
+    print(json.dumps(response, indent=4, cls=DecimalEncoder))
+
+```
+
+### Delete Item
+
+```python
+title = "The Big New Movie"
+year = 2015
+
+print("Attempting a conditional delete...")
+
+try:
+    response = table.delete_item(
+        Key={
+            'year': year,
+            'title': title
+        }
+    )
+except ClientError as e:
+    if e.response['Error']['Code'] == "ConditionalCheckFailedException":
+        print(e.response['Error']['Message'])
+    else:
+        raise
+else:
+    print("DeleteItem succeeded:")
+    print(json.dumps(response, indent=4, cls=DecimalEncoder))
+```
+
+### Query
+
+```python
+from boto3.dynamodb.conditions import Key
+
+print("Movies from 1985")
+
+response = table.query(
+    KeyConditionExpression=Key('year').eq(1985)
+)
+
+for i in response['Items']:
+    print(i['year'], ":", i['title'])
+```
+
+```python
+print("Movies from 1992 - titles A-L, with genres and lead actor")
+
+response = table.query(
+    ProjectionExpression="#yr, title, info.genres, info.actors[0]",
+    # Expression Attribute Names for Projection Expression only.
+    ExpressionAttributeNames={"#yr": "year"},
+    KeyConditionExpression=Key('year').eq(
+        1992) & Key('title').between('A', 'L')
+)
+
+for i in response[u'Items']:
+    print(json.dumps(i, cls=DecimalEncoder))
+```
+
+### Scan
+
+```python
+fe = Key('year').between(1950, 1959)
+pe = "#yr, title, info.rating"
+# Expression Attribute Names for Projection Expression only.
+ean = {"#yr": "year", }
+esk = None
+
+response = table.scan(
+    FilterExpression=fe,
+    ProjectionExpression=pe,
+    ExpressionAttributeNames=ean
+)
+
+for i in response['Items']:
+    print(json.dumps(i, cls=DecimalEncoder))
+
+while 'LastEvaluatedKey' in response:
+    response = table.scan(
+        ProjectionExpression=pe,
+        FilterExpression=fe,
+        ExpressionAttributeNames=ean,
+        ExclusiveStartKey=response['LastEvaluatedKey']
+    )
+
+    for i in response['Items']:
+        print(json.dumps(i, cls=DecimalEncoder))
+```
+
+### Delete table
+
+```python
+import boto3
+
+dynamodb = boto3.resource('dynamodb')
+
+table = dynamodb.Table('Movies')
+
+table.delete()
 ```

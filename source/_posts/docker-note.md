@@ -60,6 +60,12 @@ $ sudo nano /etc/group
 
 add username to `docker:x:999:<username>`, e.x. `docker:x:999:admin`
 
+Or:
+
+```bash
+sudo usermod -a -G docker <username>
+```
+
 ## On Ubuntu by Shell Script
 
 ```bash
