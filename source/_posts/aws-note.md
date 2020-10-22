@@ -18,6 +18,7 @@ toc: true
 ## Install
 
 ### AWS CLI and Boto3
+
 #### Amazon Linux 2
 
 The AWS CLI is already installed on Amazon Linux 2.
@@ -65,7 +66,6 @@ Install the AWS CLI and Boto3:
 ```bash
 pip install awscli boto3 --upgrade --user
 ```
-
 
 ### Docker
 
@@ -120,6 +120,7 @@ aws sts get-caller-identity
 ## S3
 
 Upload folder to s3:
+
 ```bash
 aws s3 cp <path-to-source-folder> s3://<path-to-target-folder> --recursive --exclude ".DS_Store"
 ```
@@ -127,34 +128,38 @@ aws s3 cp <path-to-source-folder> s3://<path-to-target-folder> --recursive --exc
 ## Dynamodb
 
 create table:
+
 ```bash
 aws dynamodb create-table \
     --table-name Music \
     --key-schema AttributeName=Artist,KeyType=HASH \
-                 AttributeName=SongTitle,KeyType=RANGE \    
+                 AttributeName=SongTitle,KeyType=RANGE \
     --attribute-definitions \
         AttributeName=Artist,AttributeType=S \
-        AttributeName=SongTitle,AttributeType=S \    
+        AttributeName=SongTitle,AttributeType=S \
     --provisioned-throughput \
         ReadCapacityUnits=5,WriteCapacityUnits=5
 ```
 
 describe table:
+
 ```bash
 aws dynamodb describe-table --table-name Music
 ```
 
 put item:
+
 ```bash
 aws dynamodb put-item \
     --table-name Music \
     --item '{
         "Artist": {"S": "Dream Theater"},
-        "AlbumTitle": {"S": "Images and Words"},        
+        "AlbumTitle": {"S": "Images and Words"},
         "SongTitle": {"S": "Under a Glass Moon"} }'
 ```
 
 scan table:
+
 ```bash
 aws dynamodb scan --table-name Music
 ```
@@ -445,31 +450,24 @@ with open("moviedata.json") as json_file:
 ```
 
 `moviedata.json`:
+
 ```json
-[{
+[
+  {
     "year": 2013,
     "title": "Rush",
     "info": {
       "directors": ["Ron Howard"],
       "release_date": "2013-09-02T00:00:00Z",
       "rating": 8.3,
-      "genres": [
-        "Action",
-        "Biography",
-        "Drama",
-        "Sport"
-      ],
+      "genres": ["Action", "Biography", "Drama", "Sport"],
       "image_url": "http://ia.media-imdb.com/images/M/MV5BMTQyMDE0MTY0OV5BMl5BanBnXkFtZTcwMjI2OTI0OQ@@._V1_SX400_.jpg",
       "plot": "A re-creation of the merciless 1970s rivalry between Formula One rivals James Hunt and Niki Lauda.",
       "rank": 2,
       "running_time_secs": 7380,
-      "actors": [
-        "Daniel Bruhl",
-        "Chris Hemsworth",
-        "Olivia Wilde"
-      ]
+      "actors": ["Daniel Bruhl", "Chris Hemsworth", "Olivia Wilde"]
     }
-  },
+  }
 ]
 ```
 
@@ -822,6 +820,7 @@ def read_csv(file):
 ![Transcribing-Audio](/photos/aws-note/Transcribing-Audio.png)
 
 TranscribeAudio:
+
 ```python
 import boto3
 
@@ -846,6 +845,7 @@ def lambda_handler(event, context):
 ```
 
 ParseTranscription:
+
 ```python
 import json
 import os
@@ -977,6 +977,7 @@ def lambda_handler(event, context):
 ```
 
 send_message.py:
+
 ```python
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
@@ -1036,6 +1037,7 @@ SQS does not allow API calls such as CreateQueue using cross-account permissions
 
 Create AWS CLI Profiles
 Development account admin:
+
 ```bash
 aws configure --profile devadmin
 Production account admin:
@@ -1062,6 +1064,7 @@ aws lambda add-permission \
 ```
 
 To view the policy:
+
 ```bash
 aws lambda get-policy \
 --function-name CreateSQSQueue \
@@ -1070,6 +1073,7 @@ aws lambda get-policy \
 ```
 
 To remove the policy:
+
 ```bash
 aws lambda remove-permission \
 --function-name CreateSQSQueue \
@@ -1079,6 +1083,7 @@ aws lambda remove-permission \
 ```
 
 Invoke the Production Lambda Function from the Development Account:
+
 ```bash
 aws lambda invoke \
 --function-name '__LAMBDA_FUNCTION_ARN__' \
@@ -1090,6 +1095,7 @@ output.txt
 ```
 
 lambda_function.py:
+
 ```python
 import boto3
 
@@ -1103,10 +1109,12 @@ def lambda_handler(event, context):
 ```
 
 lambda_execution_role.json:
+
 ```json
 {
   "Version": "2012-10-17",
-  "Statement": [{
+  "Statement": [
+    {
       "Effect": "Allow",
       "Action": [
         "logs:CreateLogGroup",
@@ -1116,12 +1124,117 @@ lambda_execution_role.json:
       "Resource": "arn:aws:logs:*:*:*"
     },
     {
-      "Action": [
-        "sqs:CreateQueue"
-      ],
+      "Action": ["sqs:CreateQueue"],
       "Effect": "Allow",
       "Resource": "*"
     }
   ]
 }
+```
+
+# Boto3 - Third party
+
+## Creating Slack Notifications for CloudWatch Alarms
+
+![Creating-Slack-Notifications-for-CloudWatch-Alarms](/photos/aws-note/Creating-Slack-Notifications-for-CloudWatch-Alarms.png)
+
+````python
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+import boto3
+
+ssm = boto3.client('ssm')
+
+
+def lambda_handler(event, context):
+    print(json.dumps(event))
+
+    message = json.loads(event['Records'][0]['Sns']['Message'])
+    print(json.dumps(message))
+
+    alarm_name = message['AlarmName']
+    new_state = message['NewStateValue']
+    reason = message['NewStateReason']
+
+    slack_message = {
+        'text': f':fire: {alarm_name} state is now {new_state}: {reason}\n'
+                f'```\n{message}```'
+    }
+
+    webhook_url = ssm.get_parameter(
+        Name='SlackWebHookURL', WithDecryption=True)
+
+    req = Request(webhook_url['Parameter']['Value'],
+                  json.dumps(slack_message).encode('utf-8'))
+
+    try:
+        response = urlopen(req)
+        response.read()
+        print(f"Message posted to Slack")
+    except HTTPError as e:
+        print(f'Request failed: {e.code} {e.reason}')
+    except URLError as e:
+        print(f'Server connection failed: {e.reason}')
+````
+
+## Creating a Twitter App
+
+![Creating-a-Twitter-App](/photos/aws-note/Creating-a-Twitter-App.png)
+
+```python
+import os
+import random
+
+import boto3
+from botocore.exceptions import ClientError
+import tweepy
+
+BUCKET_NAME = os.environ['BUCKET_NAME']
+KEY = 'data.txt'
+
+s3 = boto3.resource('s3')
+ssm = boto3.client('ssm')
+
+
+def get_parameter(param_name):
+    response = ssm.get_parameter(Name=param_name, WithDecryption=True)
+    credentials = response['Parameter']['Value']
+    return credentials
+
+
+def get_tweet_text():
+    filename = '/tmp/' + KEY
+    try:
+        s3.Bucket(BUCKET_NAME).download_file(KEY, filename)
+    except ClientError as e:
+        if e.response['Error']['Code'] == "404":
+            print(f'The object {KEY} does not exist in bucket {BUCKET_NAME}.')
+        else:
+            raise
+
+    with open(filename) as f:
+        lines = f.readlines()
+        return random.choice(lines)
+
+
+def lambda_handler(event, context):
+
+    # Get SSM parameters
+    CONSUMER_KEY = get_parameter('/TwitterBot/consumer_key')
+    CONSUMER_SECRET = get_parameter('/TwitterBot/consumer_secret')
+    ACCESS_TOKEN = get_parameter('/TwitterBot/access_token')
+    ACCESS_TOKEN_SECRET = get_parameter('/TwitterBot/access_token_secret')
+
+    # Authenticate Tweepy
+    auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
+    auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+    api = tweepy.API(auth)
+
+    # Send tweet
+    tweet = get_tweet_text()
+    print(tweet)
+    api.update_status(tweet)
+
 ```
